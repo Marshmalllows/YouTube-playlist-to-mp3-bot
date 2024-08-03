@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Net;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -6,6 +7,7 @@ using Telegram.Bot.Types.ReplyMarkups;
 using YoutubeExplode;
 using YoutubeExplode.Exceptions;
 using YoutubeExplode.Playlists;
+using YoutubeExplode.Videos.Streams;
 using File = System.IO.File;
 
 namespace YouTube_playlist_to_mp3_bot;
@@ -103,6 +105,65 @@ internal class Program
         else
         {
             await client.SendTextMessageAsync(chatId, "Downloading... It may take some time");
+            var filePath = @"..\..\..\temp\" + update.CallbackQuery.From.Username;
+            await DownloadPlaylist((PlaylistId)update.CallbackQuery.Data, filePath);
+            var audios = Directory.GetFiles(filePath);
+            foreach (var audio in audios)
+            {
+                var stream = File.OpenRead(audio);
+                var audioName = audio.Split('\\').Last();
+                var inputFile = InputFile.FromStream(stream, audioName.Split('.').First());
+                await client.SendAudioAsync(chatId, inputFile);
+                stream.Close();
+            }
+            await client.SendTextMessageAsync(chatId, "Done! Enjoy!");
+            foreach (var file in Directory.GetFiles(filePath))
+            {
+                File.Delete(file);
+            }
+            Directory.Delete(filePath);
         }
+    }
+
+    private static async Task DownloadPlaylist(PlaylistId playlistId, string filePath)
+    {
+        await foreach (var video in Youtube.Playlists.GetVideosAsync(playlistId))
+        {
+            var streamManifest = await Youtube.Videos.Streams.GetManifestAsync(video.Id);
+            var audioStream = streamManifest.GetAudioOnlyStreams().GetWithHighestBitrate();
+            var stream = await Youtube.Videos.Streams.GetAsync(audioStream);
+            if (!Directory.Exists(filePath))
+            {
+                Directory.CreateDirectory(filePath);
+            }
+            
+            await using var filestream = new FileStream(filePath + SongNameValidate(video.Title), FileMode.Create, FileAccess.Write);
+            await stream.CopyToAsync(filestream);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    private static string SongNameValidate(string title)
+    {
+        var songName = title.Replace('/', '_');
+        songName = songName.Replace('\\', '_');
+        songName = songName.Replace(':', '_');
+        songName = songName.Replace('*', '_');
+        songName = songName.Replace('?', '_');
+        songName = songName.Replace('"', '_');
+        songName = songName.Replace('<', '_');
+        songName = songName.Replace('>', '_');
+        songName = songName.Replace('|', '_');
+        
+        if (songName.ToLower() == "con" ||
+            songName.ToLower() == "prn" ||
+            songName.ToLower() == "aux" ||
+            songName.ToLower() == "nul")
+        {
+            songName = "badname";
+        }
+        
+        return $@"\{songName}.mp3";
     }
 }
