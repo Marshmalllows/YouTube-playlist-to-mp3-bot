@@ -3,6 +3,7 @@ using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
+using Xabe.FFmpeg;
 using YoutubeExplode;
 using YoutubeExplode.Common;
 using YoutubeExplode.Exceptions;
@@ -19,7 +20,9 @@ internal class Program
     public static void Main()
     {
         var token = File.ReadAllText(@"..\..\..\token.txt");
-        var bot = new Host(token);
+        var bot = new Host(token); // Your token in token.txt
+        FFmpeg.SetExecutablesPath(@"..\..\..\FFmpeg\bin");
+        
         bot.Start();
         bot.OnMessage += MessageHandler;
         Console.ReadKey();
@@ -43,7 +46,7 @@ internal class Program
 
     private static async void MessageReceived(ITelegramBotClient client, Update update)
     {
-        var reserveChatId = long.Parse(File.ReadAllText(@"..\..\..\reserveChatId.txt"));
+        var reserveChatId = long.Parse(File.ReadAllText(@"..\..\..\reserveChatId.txt")); // Your reserve chat id in reserveChatId.txt
         var chatId = update.Message?.Chat.Id ?? reserveChatId;
         var message = update.Message;
 
@@ -62,6 +65,8 @@ internal class Program
                 try
                 {
                     var playlist = await Youtube.Playlists.GetAsync(message.Text);
+                    var sentMessage = await client.SendTextMessageAsync(chatId, "Getting playlist info...");
+                    
                     var inlineKeyboard = new InlineKeyboardMarkup(new[]
                     {
                         new[]
@@ -71,8 +76,9 @@ internal class Program
                         }
                     });
                     var videos = await Youtube.Playlists.GetVideosAsync(playlist.Id);
-                    await client.SendTextMessageAsync(chatId, $"Are you sure you want to download audio from " +
-                                                              $"{videos.Count} videos from \"{playlist.Title}\" playlist?",
+                    await client.EditMessageTextAsync(sentMessage.Chat.Id, sentMessage.MessageId,
+                        $"Are you sure you want to download audio from " +
+                        $"{videos.Count} videos from \"{playlist.Title}\" playlist?",
                         replyMarkup: inlineKeyboard);
                 }
                 catch (PlaylistUnavailableException)
@@ -80,6 +86,10 @@ internal class Program
                     await client.SendTextMessageAsync(chatId, "The link is invalid or the playlist is unavailable");
                 }
                 catch (ArgumentException)
+                {
+                    await client.SendTextMessageAsync(chatId, "The link is invalid or the playlist is unavailable");
+                }
+                catch (HttpRequestException)
                 {
                     await client.SendTextMessageAsync(chatId, "The link is invalid or the playlist is unavailable");
                 }
@@ -93,7 +103,7 @@ internal class Program
 
     private static async void CallbackQueryReceived(ITelegramBotClient client, Update update)
     {
-        var reserveChatId = long.Parse(File.ReadAllText(@"..\..\..\reserveChatId.txt"));
+        var reserveChatId = long.Parse(File.ReadAllText(@"..\..\..\reserveChatId.txt")); // Your reserve chat id in reserveChatId.txt
         var chatId = update.CallbackQuery?.Message?.Chat.Id ?? reserveChatId;
         var messageId = update.CallbackQuery.Message.MessageId;
         await client.DeleteMessageAsync(chatId, messageId);
@@ -106,14 +116,17 @@ internal class Program
         {
             var filePath = @"..\..\..\temp\" + update.CallbackQuery.From.Username + update.CallbackQuery.From.Id 
                            + update.CallbackQuery.Message.MessageId;
+            
             await DownloadPlaylist((PlaylistId)update.CallbackQuery.Data, filePath, client, chatId);
+            
             var audios = Directory.GetFiles(filePath);
             foreach (var audio in audios)
             {
                 var stream = File.OpenRead(audio);
                 var audioName = audio.Split('\\').Last();
-                var inputFile = InputFile.FromStream(stream, audioName.Split('.').First());
+                var inputFile = InputFile.FromStream(stream, audioName);
                 var sent = true;
+                
                 do
                 {
                     try
@@ -141,18 +154,20 @@ internal class Program
                 stream.Close();
                 File.Delete(audio);
             }
-            await client.SendTextMessageAsync(chatId, "Done! Enjoy!");
+            
             Directory.Delete(filePath);
+            await client.SendTextMessageAsync(chatId, "Done! Enjoy!");
         }
     }
 
     private static async Task DownloadPlaylist(PlaylistId playlistId, string filePath, ITelegramBotClient client, ChatId chatId)
     {
+        var sentMessage = await client.SendTextMessageAsync(chatId, "Downloading... It may take some time");
         var videos = await Youtube.Playlists.GetVideosAsync(playlistId);
-        var sentMessage = await client.SendTextMessageAsync(chatId, "Downloading... It may take some time\n" +
-                                                                  $"Downloaded 0% (0/{videos.Count})");
         var downloadedCount = 0;
+        
         Directory.CreateDirectory(filePath);
+        
         await foreach (var video in Youtube.Playlists.GetVideosAsync(playlistId))
         {
             try
@@ -160,17 +175,25 @@ internal class Program
                 var streamManifest = await Youtube.Videos.Streams.GetManifestAsync(video.Id);
                 var audioStream = streamManifest.GetAudioOnlyStreams().GetWithHighestBitrate();
                 var stream = await Youtube.Videos.Streams.GetAsync(audioStream);
-                await using var filestream = new FileStream(filePath + SongNameValidate(video.Title), FileMode.Create,
-                    FileAccess.Write);
+                var audioPath = filePath + SongNameValidate(video.Title);
+                
+                var filestream = new FileStream(audioPath, FileMode.Create, FileAccess.Write);
                 await stream.CopyToAsync(filestream);
                 filestream.Close();
+
+                var conversion = await FFmpeg.Conversions.FromSnippet.Convert(audioPath, 
+                        audioPath.Replace(".opus", ".mp3"));
+                await conversion.Start();
+                File.Delete(audioPath);
             }
             catch (HttpRequestException)
             {
                 await client.SendTextMessageAsync(chatId, $"Can`t access video \"{video.Title}\", skipping...");
                 File.Delete(SongNameValidate(video.Title));
             }
+            
             downloadedCount++;
+            
             await client.EditMessageTextAsync(sentMessage.Chat.Id, sentMessage.MessageId,
                 "Downloading... It may take some time\n" +
                 $"Downloaded {downloadedCount * 100 / videos.Count}% " +
@@ -200,6 +223,6 @@ internal class Program
             songName = "badname";
         }
         
-        return $@"\{songName}.mp3";
+        return $@"\{songName}.opus";
     }
 }
