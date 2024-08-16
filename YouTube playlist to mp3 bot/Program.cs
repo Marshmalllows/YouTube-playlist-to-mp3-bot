@@ -4,7 +4,6 @@ using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using Xabe.FFmpeg;
-using Xabe.FFmpeg.Exceptions;
 using YoutubeExplode;
 using YoutubeExplode.Common;
 using YoutubeExplode.Exceptions;
@@ -16,7 +15,7 @@ namespace YouTube_playlist_to_mp3_bot;
 
 internal class Program
 {
-    private static readonly YoutubeClient Youtube = new YoutubeClient();
+    private static readonly YoutubeClient Youtube = new();
     
     public static void Main()
     {
@@ -49,7 +48,14 @@ internal class Program
     {
         var reserveChatId = long.Parse(File.ReadAllText(@"..\..\..\reserveChatId.txt")); // Your reserve chat id in reserveChatId.txt
         var chatId = update.Message?.Chat.Id ?? reserveChatId;
+        var settingsPath = @"..\..\..\user settings\" + update.Message?.From?.Username;
         var message = update.Message;
+        
+        if (!File.Exists(settingsPath))
+        {
+            await UserRegister(client, update, chatId);
+            return;
+        }
 
         switch (message?.Text)
         {
@@ -67,24 +73,23 @@ internal class Program
                 {
                     new[]
                     {
-                        InlineKeyboardButton.WithCallbackData("Bitrate", "Bitrate Settings"),
-                        InlineKeyboardButton.WithCallbackData("Sample Rate", "Sample Settings"),
-                        InlineKeyboardButton.WithCallbackData("Channels", "Channels Settings")
+                        InlineKeyboardButton.WithCallbackData("Bitrate", "Settings Bitrate"),
+                        InlineKeyboardButton.WithCallbackData("Sample Rate", "Settings Sample"),
+                        InlineKeyboardButton.WithCallbackData("Channels", "Settings Channels")
                     },
                     new[]
                     {
-                        InlineKeyboardButton.WithCallbackData("Close", "Close Settings")
+                        InlineKeyboardButton.WithCallbackData("Close", "Settings Close")
                     }
                 });
-                await client.SendTextMessageAsync(chatId, "Select an option you want to edit during playlists download:",
+                await client.SendTextMessageAsync(chatId, "Select an option you want to edit in playlists download:",
                     replyMarkup: settingsInlineKeyboard);
                 break;
             default:
+                var sentMessage = await client.SendTextMessageAsync(chatId, "Getting playlist info...");
                 try
                 {
-                    var sentMessage = await client.SendTextMessageAsync(chatId, "Getting playlist info...");
                     var playlist = await Youtube.Playlists.GetAsync(message.Text);
-                    
                     var inlineKeyboard = new InlineKeyboardMarkup(new[]
                     {
                         new[]
@@ -98,6 +103,7 @@ internal class Program
                         $"Are you sure you want to download audio from " +
                         $"{videos.Count} videos from \"{playlist.Title}\" playlist?",
                         replyMarkup: inlineKeyboard);
+                    break;
                 }
                 catch (PlaylistUnavailableException)
                 {
@@ -115,6 +121,7 @@ internal class Program
                 {
                     Console.WriteLine(exception.Message);
                 }
+                await client.DeleteMessageAsync(chatId, sentMessage.MessageId);
                 break;
         }
     }
@@ -124,83 +131,57 @@ internal class Program
         var reserveChatId = long.Parse(File.ReadAllText(@"..\..\..\reserveChatId.txt")); // Your reserve chat id in reserveChatId.txt
         var chatId = update.CallbackQuery?.Message?.Chat.Id ?? reserveChatId;
         var messageId = update.CallbackQuery.Message.MessageId;
+        var settingsPath = @"..\..\..\user settings\" + update.CallbackQuery?.From?.Username;
         var data = update.CallbackQuery.Data;
+        
+        if (data.Contains("Language"))
+        {
+            data = data.Replace(" Language", "");
+            await using (var writer = new StreamWriter(settingsPath))
+            {
+                if (data == "English")
+                {
+                    writer.WriteLine("en");
+                }
+                else
+                {
+                    writer.WriteLine("ua");
+                }
+                writer.WriteLine("192k\n44100\n2");
+            }
+
+            await client.DeleteMessageAsync(chatId, messageId);
+            return;
+        }
+        
+        var userSettings = File.ReadAllLines(settingsPath);
         
         if (data.Contains("Settings"))
         {
-            data = data.Replace(" Settings", "");
+            data = data.Replace("Settings ", "");
             switch (data)
             {
                 case "Bitrate":
-                    var bitrateInlineKeyboard = new InlineKeyboardMarkup(new[]
-                    {
-                        new[]
-                        {
-                            InlineKeyboardButton.WithCallbackData("64 kbps", "Bitrate 64"),
-                            InlineKeyboardButton.WithCallbackData("128 kbps", "Bitrate 128"),
-                            InlineKeyboardButton.WithCallbackData("192 kbps", "Bitrate 192")
-                        },
-                        new[]
-                        {
-                            InlineKeyboardButton.WithCallbackData("256 kbps", "Bitrate 256"),
-                            InlineKeyboardButton.WithCallbackData("320 kbps", "Bitrate 320")
-                        },
-                        new []
-                        {
-                            InlineKeyboardButton.WithCallbackData("Back", "Back Settings")
-                        }
-                    });
-                    await client.EditMessageTextAsync(chatId, messageId, "Select bitrate option you want to use:",
-                        replyMarkup: bitrateInlineKeyboard);
+                    Settings.BitrateSettings(client, chatId, messageId, userSettings[1].Replace("k", ""));
                     break;
                 case "Sample":
-                    var sampleInlineKeyboard = new InlineKeyboardMarkup(new[]
-                    {
-                        new[]
-                        {
-                            InlineKeyboardButton.WithCallbackData("22,050 Hz", "Sample 22050")
-                        },
-                        new[]
-                        {
-                            InlineKeyboardButton.WithCallbackData("44,100 Hz", "Sample 44100"),
-                            InlineKeyboardButton.WithCallbackData("48,000 Hz", "Sample 48000")
-                        },
-                        new[]
-                        {
-                            InlineKeyboardButton.WithCallbackData("Back", "Back Settings"),
-                        }
-                    });
-                    await client.EditMessageTextAsync(chatId, messageId, "Select sample rate option you want to use:",
-                        replyMarkup: sampleInlineKeyboard);
+                    Settings.SampleRateSettings(client, chatId, messageId, userSettings[2]);
                     break;
                 case "Channels":
-                    var channelsInlineKeyboard = new InlineKeyboardMarkup(new[]
-                    {
-                        new[]
-                        {
-                            InlineKeyboardButton.WithCallbackData("Mono", "Channels mono"),
-                            InlineKeyboardButton.WithCallbackData("Stereo", "Channels stereo")
-                        },
-                        new[]
-                        {
-                            InlineKeyboardButton.WithCallbackData("Back", "Back Settings")
-                        }
-                    });
-                    await client.EditMessageTextAsync(chatId, messageId, "Select channels option you want to use:",
-                        replyMarkup: channelsInlineKeyboard);
+                    Settings.ChannelsSettings(client, chatId, messageId, userSettings[3]);
                     break;
                 case "Back":
                     var settingsInlineKeyboard = new InlineKeyboardMarkup(new[]
                     {
                         new[]
                         {
-                            InlineKeyboardButton.WithCallbackData("Bitrate", "Bitrate Settings"),
-                            InlineKeyboardButton.WithCallbackData("Sample Rate", "Sample Settings"),
-                            InlineKeyboardButton.WithCallbackData("Channels", "Channels Settings")
+                            InlineKeyboardButton.WithCallbackData("Bitrate", "Settings Bitrate"),
+                            InlineKeyboardButton.WithCallbackData("Sample Rate", "Settings Sample"),
+                            InlineKeyboardButton.WithCallbackData("Channels", "Settings Channels")
                         },
                         new[]
                         {
-                            InlineKeyboardButton.WithCallbackData("Close", "Close Settings")
+                            InlineKeyboardButton.WithCallbackData("Close", "Settings Close")
                         }
                     });
                     await client.EditMessageTextAsync(chatId, messageId, "Select an option you want to edit during playlists download:",
@@ -210,29 +191,61 @@ internal class Program
                     await client.DeleteMessageAsync(chatId, messageId);
                     break;
             }
+            return;
         }
-        else if (data.Contains("Bitrate"))
+        
+        if (data.Contains("Change"))
         {
-            data = data.Replace("Bitrate ", "");
-            await client.SendTextMessageAsync(chatId, "Your bitrate: " + data);
-            await client.DeleteMessageAsync(chatId, messageId);
-        } else if (data.Contains("Sample"))
-        {
-            data = data.Replace("Sample ", "");
-            await client.SendTextMessageAsync(chatId, "Your sample rate: " + data + "hz");
-            await client.DeleteMessageAsync(chatId, messageId);
-        }
-        else if (data.Contains("Channels"))
-        {
-            data = data.Replace("Channels ", "");
-            await client.SendTextMessageAsync(chatId, "Your channels settings: " + data);
-            await client.DeleteMessageAsync(chatId, messageId);
+            int userSettingsIndex;
+            data = data.Replace("Change ", "");
+
+            if (data.Contains("Bitrate"))
+            {
+                data = data.Replace("Bitrate ", "");
+                userSettingsIndex = 1;
+            }
+            else if (data.Contains("Sample"))
+            {
+                data = data.Replace("Sample ", "");
+                userSettingsIndex = 2;
+            }
+            else
+            {
+                data = data.Replace("Channel ", "");
+                userSettingsIndex = 3;
+            }
+            
+            File.Delete(settingsPath);
+            await using (var writer = new StreamWriter(settingsPath))
+            {
+                userSettings[userSettingsIndex] = data;
+                foreach (var userSetting in userSettings)
+                {
+                    await writer.WriteLineAsync(userSetting);
+                }
+            }
+            
+            var settingsInlineKeyboard = new InlineKeyboardMarkup(new[]
+            {
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("Bitrate", "Settings Bitrate"),
+                    InlineKeyboardButton.WithCallbackData("Sample Rate", "Settings Sample"),
+                    InlineKeyboardButton.WithCallbackData("Channels", "Settings Channels")
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("Close", "Settings Close")
+                }
+            });
+            await client.EditMessageTextAsync(chatId, messageId, "Done! Select an option you want to edit in playlists download:",
+                replyMarkup: settingsInlineKeyboard);
         }
         else
         {
             await client.DeleteMessageAsync(chatId, messageId);
 
-            if (update.CallbackQuery.Data == "No")
+            if (data == "No")
             {
                 await client.SendTextMessageAsync(chatId,
                     "As you say so! You can send another playlist link to download");
@@ -242,7 +255,8 @@ internal class Program
                 var filePath = @"..\..\..\temp\" + update.CallbackQuery.From.Username + update.CallbackQuery.From.Id
                                + update.CallbackQuery.Message.MessageId;
 
-                await DownloadPlaylist((PlaylistId)update.CallbackQuery.Data, filePath, client, chatId);
+                await DownloadPlaylist((PlaylistId)update.CallbackQuery.Data, client, chatId, filePath,
+                    update.CallbackQuery.From.Username);
 
                 var audios = Directory.GetFiles(filePath);
                 foreach (var audio in audios)
@@ -291,14 +305,16 @@ internal class Program
         }
     }
 
-    private static async Task DownloadPlaylist(PlaylistId playlistId, string filePath, ITelegramBotClient client, ChatId chatId)
+    private static async Task DownloadPlaylist(PlaylistId playlistId, ITelegramBotClient client, ChatId chatId, string filePath, 
+        string username)
     {
         var sentMessage = await client.SendTextMessageAsync(chatId, "Downloading... It may take some time");
         var videos = await Youtube.Playlists.GetVideosAsync(playlistId);
+        var userSettings = File.ReadAllLines(@"..\..\..\user settings\" + username);
         var downloadedCount = 0;
         await client.EditMessageTextAsync(sentMessage.Chat.Id, sentMessage.MessageId,
             "Downloading... It may take some time\n" +
-            $"Downloaded {downloadedCount * 100 / videos.Count}% " +
+            "Downloaded 0% " +
             $"({downloadedCount}/{videos.Count})");
         
         Directory.CreateDirectory(filePath);
@@ -317,8 +333,9 @@ internal class Program
                 filestream.Close();
 
                 var conversion = FFmpeg.Conversions.New().AddParameter($"-i \"{audioPath}\"")
-                    .AddParameter("-ab 192k")
-                    .AddParameter("-ar 44100")
+                    .AddParameter("-ab " + userSettings[1])
+                    .AddParameter("-ar " + userSettings[2])
+                    .AddParameter("-ac " + userSettings[3])
                     .SetOutput(audioPath.Replace(".opus", ".mp3"));
                 await conversion.Start();
                 File.Delete(audioPath);
@@ -361,5 +378,19 @@ internal class Program
         }
         
         return $@"\{songName}.opus";
+    }
+
+    private static async Task UserRegister(ITelegramBotClient client, Update update, ChatId chatId)
+    {
+        var languageInlineKeyboard = new InlineKeyboardMarkup(new[]
+        {
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData("\ud83c\uddec\ud83c\udde7", "English Language"),
+                InlineKeyboardButton.WithCallbackData("\ud83c\uddfa\ud83c\udde6", "Ukrainian Language")
+            }
+        });
+        await client.SendTextMessageAsync(chatId, "sometext", replyMarkup: languageInlineKeyboard);
+        await Task.CompletedTask;
     }
 }
