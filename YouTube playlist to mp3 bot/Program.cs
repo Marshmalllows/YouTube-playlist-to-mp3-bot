@@ -4,6 +4,7 @@ using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using Xabe.FFmpeg;
+using Xabe.FFmpeg.Exceptions;
 using YoutubeExplode;
 using YoutubeExplode.Common;
 using YoutubeExplode.Exceptions;
@@ -61,11 +62,28 @@ internal class Program
                                                           "To start the download, please send me the link to the playlist you want to " +
                                                           "convert to audio format.");
                 break;
+            case "/settings":
+                var settingsInlineKeyboard = new InlineKeyboardMarkup(new[]
+                {
+                    new[]
+                    {
+                        InlineKeyboardButton.WithCallbackData("Bitrate", "Bitrate Settings"),
+                        InlineKeyboardButton.WithCallbackData("Sample Rate", "Sample Settings"),
+                        InlineKeyboardButton.WithCallbackData("Channels", "Channels Settings")
+                    },
+                    new[]
+                    {
+                        InlineKeyboardButton.WithCallbackData("Close", "Close Settings")
+                    }
+                });
+                await client.SendTextMessageAsync(chatId, "Select an option you want to edit during playlists download:",
+                    replyMarkup: settingsInlineKeyboard);
+                break;
             default:
                 try
                 {
-                    var playlist = await Youtube.Playlists.GetAsync(message.Text);
                     var sentMessage = await client.SendTextMessageAsync(chatId, "Getting playlist info...");
+                    var playlist = await Youtube.Playlists.GetAsync(message.Text);
                     
                     var inlineKeyboard = new InlineKeyboardMarkup(new[]
                     {
@@ -106,57 +124,170 @@ internal class Program
         var reserveChatId = long.Parse(File.ReadAllText(@"..\..\..\reserveChatId.txt")); // Your reserve chat id in reserveChatId.txt
         var chatId = update.CallbackQuery?.Message?.Chat.Id ?? reserveChatId;
         var messageId = update.CallbackQuery.Message.MessageId;
-        await client.DeleteMessageAsync(chatId, messageId);
-
-        if (update.CallbackQuery.Data == "No")
+        var data = update.CallbackQuery.Data;
+        
+        if (data.Contains("Settings"))
         {
-            await client.SendTextMessageAsync(chatId, "As you say so! You can send another playlist link to download");
+            data = data.Replace(" Settings", "");
+            switch (data)
+            {
+                case "Bitrate":
+                    var bitrateInlineKeyboard = new InlineKeyboardMarkup(new[]
+                    {
+                        new[]
+                        {
+                            InlineKeyboardButton.WithCallbackData("64 kbps", "Bitrate 64"),
+                            InlineKeyboardButton.WithCallbackData("128 kbps", "Bitrate 128"),
+                            InlineKeyboardButton.WithCallbackData("192 kbps", "Bitrate 192")
+                        },
+                        new[]
+                        {
+                            InlineKeyboardButton.WithCallbackData("256 kbps", "Bitrate 256"),
+                            InlineKeyboardButton.WithCallbackData("320 kbps", "Bitrate 320")
+                        },
+                        new []
+                        {
+                            InlineKeyboardButton.WithCallbackData("Back", "Back Settings")
+                        }
+                    });
+                    await client.EditMessageTextAsync(chatId, messageId, "Select bitrate option you want to use:",
+                        replyMarkup: bitrateInlineKeyboard);
+                    break;
+                case "Sample":
+                    var sampleInlineKeyboard = new InlineKeyboardMarkup(new[]
+                    {
+                        new[]
+                        {
+                            InlineKeyboardButton.WithCallbackData("22,050 Hz", "Sample 22050")
+                        },
+                        new[]
+                        {
+                            InlineKeyboardButton.WithCallbackData("44,100 Hz", "Sample 44100"),
+                            InlineKeyboardButton.WithCallbackData("48,000 Hz", "Sample 48000")
+                        },
+                        new[]
+                        {
+                            InlineKeyboardButton.WithCallbackData("Back", "Back Settings"),
+                        }
+                    });
+                    await client.EditMessageTextAsync(chatId, messageId, "Select sample rate option you want to use:",
+                        replyMarkup: sampleInlineKeyboard);
+                    break;
+                case "Channels":
+                    var channelsInlineKeyboard = new InlineKeyboardMarkup(new[]
+                    {
+                        new[]
+                        {
+                            InlineKeyboardButton.WithCallbackData("Mono", "Channels mono"),
+                            InlineKeyboardButton.WithCallbackData("Stereo", "Channels stereo")
+                        },
+                        new[]
+                        {
+                            InlineKeyboardButton.WithCallbackData("Back", "Back Settings")
+                        }
+                    });
+                    await client.EditMessageTextAsync(chatId, messageId, "Select channels option you want to use:",
+                        replyMarkup: channelsInlineKeyboard);
+                    break;
+                case "Back":
+                    var settingsInlineKeyboard = new InlineKeyboardMarkup(new[]
+                    {
+                        new[]
+                        {
+                            InlineKeyboardButton.WithCallbackData("Bitrate", "Bitrate Settings"),
+                            InlineKeyboardButton.WithCallbackData("Sample Rate", "Sample Settings"),
+                            InlineKeyboardButton.WithCallbackData("Channels", "Channels Settings")
+                        },
+                        new[]
+                        {
+                            InlineKeyboardButton.WithCallbackData("Close", "Close Settings")
+                        }
+                    });
+                    await client.EditMessageTextAsync(chatId, messageId, "Select an option you want to edit during playlists download:",
+                        replyMarkup: settingsInlineKeyboard);
+                    break;
+                case "Close":
+                    await client.DeleteMessageAsync(chatId, messageId);
+                    break;
+            }
+        }
+        else if (data.Contains("Bitrate"))
+        {
+            data = data.Replace("Bitrate ", "");
+            await client.SendTextMessageAsync(chatId, "Your bitrate: " + data);
+            await client.DeleteMessageAsync(chatId, messageId);
+        } else if (data.Contains("Sample"))
+        {
+            data = data.Replace("Sample ", "");
+            await client.SendTextMessageAsync(chatId, "Your sample rate: " + data + "hz");
+            await client.DeleteMessageAsync(chatId, messageId);
+        }
+        else if (data.Contains("Channels"))
+        {
+            data = data.Replace("Channels ", "");
+            await client.SendTextMessageAsync(chatId, "Your channels settings: " + data);
+            await client.DeleteMessageAsync(chatId, messageId);
         }
         else
         {
-            var filePath = @"..\..\..\temp\" + update.CallbackQuery.From.Username + update.CallbackQuery.From.Id 
-                           + update.CallbackQuery.Message.MessageId;
-            
-            await DownloadPlaylist((PlaylistId)update.CallbackQuery.Data, filePath, client, chatId);
-            
-            var audios = Directory.GetFiles(filePath);
-            foreach (var audio in audios)
+            await client.DeleteMessageAsync(chatId, messageId);
+
+            if (update.CallbackQuery.Data == "No")
             {
-                var stream = File.OpenRead(audio);
-                var audioName = audio.Split('\\').Last();
-                var inputFile = InputFile.FromStream(stream, audioName);
-                var sent = true;
-                
-                do
-                {
-                    try
-                    {
-                        await client.SendAudioAsync(chatId, inputFile);
-                        await Task.Delay(1000);
-                        sent = true;
-                    }
-                    catch (ApiRequestException ex)
-                    {
-                        if (ex.Message.Contains("Too Many Requests"))
-                        {
-                            var retryAfter = ex.Parameters?.RetryAfter ?? 60; 
-                            Console.WriteLine($"Rate limit exceeded. Retrying after {retryAfter} seconds...");
-                            await Task.Delay(retryAfter * 1000);
-                            sent = false;
-                        }
-                        else
-                        {
-                            Console.WriteLine($"An error occurred: {ex.Message}");
-                        }
-                    }
-                } while (!sent);
-                
-                stream.Close();
-                File.Delete(audio);
+                await client.SendTextMessageAsync(chatId,
+                    "As you say so! You can send another playlist link to download");
             }
-            
-            Directory.Delete(filePath);
-            await client.SendTextMessageAsync(chatId, "Done! Enjoy!");
+            else
+            {
+                var filePath = @"..\..\..\temp\" + update.CallbackQuery.From.Username + update.CallbackQuery.From.Id
+                               + update.CallbackQuery.Message.MessageId;
+
+                await DownloadPlaylist((PlaylistId)update.CallbackQuery.Data, filePath, client, chatId);
+
+                var audios = Directory.GetFiles(filePath);
+                foreach (var audio in audios)
+                {
+                    var stream = File.OpenRead(audio);
+                    var audioName = audio.Split('\\').Last();
+                    var inputFile = InputFile.FromStream(stream, audioName);
+                    var sent = true;
+
+                    do
+                    {
+                        try
+                        {
+                            await client.SendAudioAsync(chatId, inputFile);
+                            await Task.Delay(1000);
+                            sent = true;
+                        }
+                        catch (ApiRequestException ex)
+                        {
+                            if (ex.Message.Contains("Too Many Requests"))
+                            {
+                                var retryAfter = ex.Parameters?.RetryAfter ?? 60;
+                                Console.WriteLine($"Rate limit exceeded. Retrying after {retryAfter} seconds...");
+                                await Task.Delay(retryAfter * 1000);
+                                sent = false;
+                            }
+                            else if (ex.Message.Contains("Request Entity Too Large"))
+                            {
+                                await client.SendTextMessageAsync(chatId,
+                                    $"File \"{audioName}\" is too big. Skipping...");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"An error occurred: {ex.Message}");
+                            }
+                        }
+                    } while (!sent);
+
+                    stream.Close();
+                    File.Delete(audio);
+                }
+
+                Directory.Delete(filePath);
+                await client.SendTextMessageAsync(chatId, "Done! Enjoy!");
+            }
         }
     }
 
@@ -165,6 +296,10 @@ internal class Program
         var sentMessage = await client.SendTextMessageAsync(chatId, "Downloading... It may take some time");
         var videos = await Youtube.Playlists.GetVideosAsync(playlistId);
         var downloadedCount = 0;
+        await client.EditMessageTextAsync(sentMessage.Chat.Id, sentMessage.MessageId,
+            "Downloading... It may take some time\n" +
+            $"Downloaded {downloadedCount * 100 / videos.Count}% " +
+            $"({downloadedCount}/{videos.Count})");
         
         Directory.CreateDirectory(filePath);
         
@@ -181,8 +316,10 @@ internal class Program
                 await stream.CopyToAsync(filestream);
                 filestream.Close();
 
-                var conversion = await FFmpeg.Conversions.FromSnippet.Convert(audioPath, 
-                        audioPath.Replace(".opus", ".mp3"));
+                var conversion = FFmpeg.Conversions.New().AddParameter($"-i \"{audioPath}\"")
+                    .AddParameter("-ab 192k")
+                    .AddParameter("-ar 44100")
+                    .SetOutput(audioPath.Replace(".opus", ".mp3"));
                 await conversion.Start();
                 File.Delete(audioPath);
             }
