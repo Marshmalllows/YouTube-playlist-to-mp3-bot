@@ -388,7 +388,7 @@ internal class Program
                                 InlineKeyboardButton.WithCallbackData("Закрити", "Settings Close")
                             }
                         });
-                        await client.SendTextMessageAsync(chatId, "Виберіть опцію, яку Ви хочете змінити в завантаженні плейлистів:",
+                        await client.EditMessageTextAsync(chatId, messageId, "Виберіть опцію, яку Ви хочете змінити в завантаженні плейлистів:",
                             replyMarkup: settingsInlineKeyboard);
                     }
                     break;
@@ -466,7 +466,8 @@ internal class Program
                         InlineKeyboardButton.WithCallbackData("Закрити", "Settings Close")
                     }
                 });
-                await client.SendTextMessageAsync(chatId, "Готово! Виберіть опцію, яку Ви хочете змінити в завантаженні плейлистів:",
+                await client.EditMessageTextAsync(chatId, messageId, "Готово! Виберіть опцію, яку Ви хочете змінити" +
+                                                                     " в завантаженні плейлистів:",
                     replyMarkup: settingsInlineKeyboard);
             }
         }
@@ -585,7 +586,7 @@ internal class Program
                 var audioStream = streamManifest.GetAudioOnlyStreams().GetWithHighestBitrate();
                 var stream = await Youtube.Videos.Streams.GetAsync(audioStream);
                 var audioPath = filePath + SongNameValidate(video.Title);
-                
+
                 var filestream = new FileStream(audioPath, FileMode.Create, FileAccess.Write);
                 await stream.CopyToAsync(filestream);
                 filestream.Close();
@@ -599,6 +600,19 @@ internal class Program
                     .SetOutput(audioPath.Replace(".opus", ".mp3"));
                 await conversion.Start();
                 File.Delete(audioPath);
+            }
+            catch (VideoUnplayableException)
+            {
+                if (language == "en")
+                {
+                    await client.SendTextMessageAsync(chatId, $"Can`t access video \"{video.Title}\", skipping...");
+                }
+                else
+                {
+                    await client.SendTextMessageAsync(chatId, $"Невдалось отримати доступ до відео \"{video.Title}\", пропускаю...");
+                }
+                
+                File.Delete(SongNameValidate(video.Title));
             }
             catch (HttpRequestException)
             {
