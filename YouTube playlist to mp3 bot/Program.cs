@@ -264,7 +264,7 @@ internal class Program
         var chatId = update.CallbackQuery?.Message?.Chat.Id ?? reserveChatId;
         var messageId = update.CallbackQuery.Message.MessageId;
         var settingsPath = @"..\..\..\user settings\" + update.CallbackQuery?.From.Username;
-        var language = File.ReadLines(settingsPath).First();
+        
         var data = update.CallbackQuery.Data;
         
         if (data.Contains("Language"))
@@ -326,13 +326,14 @@ internal class Program
                 }
                 else
                 {
-                    await client.SendTextMessageAsync(chatId, "Дуже добре! Тепер Ви можете замантажувати аудіо " +
+                    await client.SendTextMessageAsync(chatId, "Дуже добре! Тепер Ви можете завантажувати аудіо " +
                                                               "файли з відео з плейлистів. Просто надайте мені посилання!");
                 }
             }
             return;
         }
         
+        var language = File.ReadLines(settingsPath).First();
         var userSettings = File.ReadAllLines(settingsPath);
         
         if (data.Contains("Settings"))
