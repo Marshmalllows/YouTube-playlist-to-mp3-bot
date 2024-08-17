@@ -30,17 +30,24 @@ internal class Program
 
     private static void MessageHandler(ITelegramBotClient client, Update update)
     {
-        switch (update.Type)
+        try
         {
-            case UpdateType.Message:
-                MessageReceived(client, update);
-                break;
-            case UpdateType.CallbackQuery:
-                CallbackQueryReceived(client, update);
-                break;
-            default:
-                Console.WriteLine("Unknown update type");
-                break;
+            switch (update.Type)
+            {
+                case UpdateType.Message:
+                    MessageReceived(client, update);
+                    break;
+                case UpdateType.CallbackQuery:
+                    CallbackQueryReceived(client, update);
+                    break;
+                default:
+                    Console.WriteLine("Unknown update type");
+                    break;
+            }
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
         }
     }
 
