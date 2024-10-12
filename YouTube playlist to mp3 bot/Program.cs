@@ -19,13 +19,18 @@ internal class Program
     
     public static void Main()
     {
-        var token = File.ReadAllText(@"..\..\..\token.txt");
-        var bot = new Host(token); // Your token in token.txt
-        FFmpeg.SetExecutablesPath(@"..\..\..\FFmpeg\bin");
+        string? exit;
+        do
+        {
+            var token = File.ReadAllText(@"..\..\..\token.txt");
+            var bot = new Host(token); // Your token in token.txt
+            FFmpeg.SetExecutablesPath(@"..\..\..\FFmpeg\bin");
         
-        bot.Start();
-        bot.OnMessage += MessageHandler;
-        Console.ReadKey();
+            bot.Start();
+            bot.OnMessage += MessageHandler;
+            exit = Console.ReadLine();
+            
+        } while (exit != "/exit");
     }
 
     private static void MessageHandler(ITelegramBotClient client, Update update)
@@ -57,7 +62,6 @@ internal class Program
         var chatId = update.Message?.Chat.Id ?? reserveChatId;
         var settingsPath = @"..\..\..\user settings\" + update.Message?.From?.Username;
         var message = update.Message;
-        var language = "";
         
         if (!File.Exists(settingsPath))
         {
@@ -65,7 +69,7 @@ internal class Program
             return;
         }
         
-        language = File.ReadLines(settingsPath).First();
+        var language = File.ReadLines(settingsPath).First();
 
         switch (message?.Text)
         {
@@ -269,12 +273,12 @@ internal class Program
     {
         var reserveChatId = long.Parse(File.ReadAllText(@"..\..\..\reserveChatId.txt")); // Your reserve chat id in reserveChatId.txt
         var chatId = update.CallbackQuery?.Message?.Chat.Id ?? reserveChatId;
-        var messageId = update.CallbackQuery.Message.MessageId;
+        var messageId = update.CallbackQuery!.Message!.MessageId;
         var settingsPath = @"..\..\..\user settings\" + update.CallbackQuery?.From.Username;
         
-        var data = update.CallbackQuery.Data;
+        var data = update.CallbackQuery!.Data;
         
-        if (data.Contains("Language"))
+        if (data!.Contains("Language"))
         {
             var registered = false;
             var oldUserSettings = new string[4];
@@ -501,8 +505,8 @@ internal class Program
                 var filePath = @"..\..\..\temp\" + update.CallbackQuery.From.Username + update.CallbackQuery.From.Id
                                + update.CallbackQuery.Message.MessageId;
 
-                await DownloadPlaylist((PlaylistId)update.CallbackQuery.Data, client, chatId, filePath,
-                    update.CallbackQuery.From.Username);
+                await DownloadPlaylist((PlaylistId)update.CallbackQuery.Data!, client, chatId, filePath,
+                    update.CallbackQuery.From.Username!);
 
                 var audios = Directory.GetFiles(filePath);
                 foreach (var audio in audios)
