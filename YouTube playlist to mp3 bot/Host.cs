@@ -1,4 +1,5 @@
 using Telegram.Bot;
+using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 
 namespace YouTube_playlist_to_mp3_bot;
@@ -21,7 +22,7 @@ public class Host(string token)
         await Task.CompletedTask;
     }
     
-    private async Task ErrorHandler(ITelegramBotClient client, Exception exception, CancellationToken cancellationtoken)
+    private async Task ErrorHandler(ITelegramBotClient client, Exception exception, HandleErrorSource source, CancellationToken cancellationtoken)
     {
         Console.WriteLine("Error: " + exception.Message);
         await Task.CompletedTask;

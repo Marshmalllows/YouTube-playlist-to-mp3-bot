@@ -39,7 +39,7 @@ public static class Settings
                     InlineKeyboardButton.WithCallbackData("Back", "Settings Back")
                 }
             });
-            await client.EditMessageTextAsync(chatId, messageId, "Select bitrate option you want to use:",
+            await client.EditMessageText(chatId, messageId, "Select bitrate option you want to use:",
                 replyMarkup: bitrateInlineKeyboard);
         }
         else
@@ -62,7 +62,7 @@ public static class Settings
                     InlineKeyboardButton.WithCallbackData("Назад", "Settings Back")
                 }
             });
-            await client.EditMessageTextAsync(chatId, messageId, "Виберіть налаштування бітрейту, які ви хочете використовувати:",
+            await client.EditMessageText(chatId, messageId, "Виберіть налаштування бітрейту, які ви хочете використовувати:",
                 replyMarkup: bitrateInlineKeyboard);
         }
     }
@@ -106,7 +106,7 @@ public static class Settings
                 }
             });
         
-            await client.EditMessageTextAsync(chatId, messageId, "Select sample rate option you want to use:",
+            await client.EditMessageText(chatId, messageId, "Select sample rate option you want to use:",
                 replyMarkup: sampleInlineKeyboard);
         }
         else
@@ -128,7 +128,7 @@ public static class Settings
                 }
             });
         
-            await client.EditMessageTextAsync(chatId, messageId, "Виберіть налаштування частоти дискретизації, які ви хочете використовувати:",
+            await client.EditMessageText(chatId, messageId, "Виберіть налаштування частоти дискретизації, які ви хочете використовувати:",
                 replyMarkup: sampleInlineKeyboard);
         }
     }
@@ -161,7 +161,7 @@ public static class Settings
                     InlineKeyboardButton.WithCallbackData("Back", "Settings Back")
                 }
             });
-            await client.EditMessageTextAsync(chatId, messageId, "Select channels option you want to use:",
+            await client.EditMessageText(chatId, messageId, "Select channels option you want to use:",
                 replyMarkup: channelsInlineKeyboard);
         }
         else
@@ -178,7 +178,7 @@ public static class Settings
                     InlineKeyboardButton.WithCallbackData("Назад", "Settings Back")
                 }
             });
-            await client.EditMessageTextAsync(chatId, messageId, "Виберіть налаштування каналів, які ви хочете використовувати:",
+            await client.EditMessageText(chatId, messageId, "Виберіть налаштування каналів, які ви хочете використовувати:",
                 replyMarkup: channelsInlineKeyboard);
         }
     }
@@ -186,7 +186,7 @@ public static class Settings
     public static async void LanguageSettings(ITelegramBotClient client, ChatId chatId, Update update)
     {
         var checks = new string[2];
-        var language = File.ReadLines(@"..\..\..\user settings\" + update.Message?.From?.Username).First();
+        var language = File.ReadLines(Path.Combine(AppContext.BaseDirectory, "user settings", update.Message?.From?.Username ?? "unknown")).First();
 
         for (var i = 0; i < checks.Length; i++)
         {
@@ -211,7 +211,7 @@ public static class Settings
                     InlineKeyboardButton.WithCallbackData("Close", "Settings Close")
                 }
             });
-            await client.SendTextMessageAsync(chatId, "Select the language You want to use:",
+            await client.SendMessage(chatId, "Select the language You want to use:",
                 replyMarkup: languageInlineKeyboard);
         }
         else
@@ -228,7 +228,7 @@ public static class Settings
                     InlineKeyboardButton.WithCallbackData("Закрити", "Settings Close")
                 }
             });
-            await client.SendTextMessageAsync(chatId, "Оберіть мову, яку Ви хочете використовувати:",
+            await client.SendMessage(chatId, "Оберіть мову, яку Ви хочете використовувати:",
                 replyMarkup: languageInlineKeyboard);
         }
     }
