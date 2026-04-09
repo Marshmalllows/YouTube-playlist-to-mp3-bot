@@ -19,7 +19,7 @@ internal class Program
     private static readonly YoutubeClient Youtube = new();
     private static readonly string BaseDir = AppContext.BaseDirectory;
 
-    public static void Main()
+    public static async Task Main()
     {
         var envFile = Path.Combine(BaseDir, ".env");
         if (File.Exists(envFile))
@@ -41,15 +41,11 @@ internal class Program
         Directory.CreateDirectory(Path.Combine(BaseDir, "user settings"));
         Directory.CreateDirectory(Path.Combine(BaseDir, "temp"));
 
-        string? exit;
-        do
-        {
-            var bot = new Host(token);
-            bot.Start();
-            bot.OnMessage += MessageHandler;
-            exit = Console.ReadLine();
-
-        } while (exit != "/exit");
+        var bot = new Host(token);
+        bot.Start();
+        bot.OnMessage += MessageHandler;
+        Console.WriteLine("Bot is running. Press Ctrl+C to stop.");
+        await Task.Delay(Timeout.Infinite);
     }
 
     private static void MessageHandler(ITelegramBotClient client, Update update)
